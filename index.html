@@ -60,6 +60,30 @@
             const canvas = document.getElementById('gameCanvas');
             const ctx = canvas.getContext('2d');
 
+            // Function to resize canvas
+function resizeCanvas() {
+    const aspectRatio = 4 / 3; // Assuming a standard aspect ratio
+    const maxCanvasWidth = 800;
+    const maxCanvasHeight = 600;
+
+    // Determine new canvas dimensions
+    let width = window.innerWidth - 20; // Small margin
+    let height = width / aspectRatio;
+
+    // Clamp dimensions to max size
+    if (width > maxCanvasWidth) {
+        width = maxCanvasWidth;
+        height = maxCanvasHeight;
+    }
+
+    // Apply dimensions to canvas
+    canvas.width = width;
+    canvas.height = height;
+}
+
+// Resize the canvas before starting the game
+resizeCanvas();
+
             // Gunshot sound
             const gunshotSound = new Audio('gunshot.mp3');
 
