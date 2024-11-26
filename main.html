@@ -1,0 +1,444 @@
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Fruit Game</title>
+        <style>
+            canvas {
+                border: 2px solid black;
+                display: block;
+                margin: auto;
+                background-image: url('background.jpg'); 
+                background-size: cover;
+            }   
+                #resetButton {
+            display: none; /* Initially hidden */
+            margin: 20px auto;
+            padding: 10px 20px;
+            font-size: 18px;
+            cursor: pointer;
+            border: 2px solid black;
+            background-color: lightgray;
+            border-radius: 5px;
+        }
+
+        #resetButton:hover {
+            background-color: gray;
+
+            }
+        </style>
+    </head>
+    <body>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <button id="resetButton">You WON!!!!!</button>
+
+        <script>
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+
+            // Gunshot sound
+            const gunshotSound = new Audio('gunshot.mp3');
+
+            // Background music
+            const backgroundMusic = new Audio('background.mp3'); 
+
+            backgroundMusic.loop = true; 
+            backgroundMusic.volume = 0.5; 
+            backgroundMusic.play().catch(err => console.log("Background music playback blocked until user interaction."));
+
+            // Life lost sound
+            const lifeLostSound = new Audio('lifeLostSound.mp3'); 
+
+            // Fruit collection sound
+            const fruitCollectedSound = new Audio('fruitCollectSound.mp3');
+
+            // Game over sound
+            const gameOverSound = new Audio('gameOverSound.mp3');
+
+            // Jump sound
+            const jumpSound = new Audio('jump.mp3');
+
+
+            const resetButton = document.getElementById('resetButton');
+
+            function stopMusic() {
+             backgroundMusic.pause(); // Pause the music
+              backgroundMusic.currentTime = 0; // Reset to the start
+              resetButton.style.display = 'block'; // Show reset button when game ends
+            }
+          
+            
+            // Start music after user interaction
+            function startMusic() {
+                backgroundMusic.play().catch(err => console.log("Background music playback blocked until user interaction."));
+                // Remove event listeners after the first interaction (to prevent multiple triggers)
+                window.removeEventListener('click', startMusic); 
+                window.removeEventListener('keydown', startMusic); 
+            }
+
+            // Event listener to start music on first user interaction
+            window.addEventListener('click', startMusic);
+            window.addEventListener('keydown', startMusic);
+
+            // Image assets
+            const playerImg = new Image();
+            playerImg.src = 'player.png';
+            const fruitImg = new Image();
+            fruitImg.src = 'fruit.png';
+            const enemyImg = new Image();
+            enemyImg.src = 'enemy.png';
+            const enemy2Img = new Image();
+            enemy2Img.src = 'enemy2.png';
+            const enemy3Img = new Image();
+            enemy3Img.src = 'enemy3.png';
+            const bulletImg = new Image();
+            bulletImg.src = 'bullet.png';
+
+            let imagesLoaded = 0;
+            function checkAllImagesLoaded() {
+                imagesLoaded++;
+                if (imagesLoaded === 6) {
+                    gameLoop();
+                }
+            }
+
+            playerImg.onload = checkAllImagesLoaded;
+            fruitImg.onload = checkAllImagesLoaded;
+            enemyImg.onload = checkAllImagesLoaded;
+            enemy2Img.onload = checkAllImagesLoaded;
+            enemy3Img.onload = checkAllImagesLoaded;
+            bulletImg.onload = checkAllImagesLoaded;
+
+            let currentLevel = 1;
+            let gameRunning = true;
+            let timeCounter = 0;
+            let score = 0;
+            let lives = 3; // Total lives across all levels
+            const baseScore = 1000; // Base score for each level, reduced by time
+            let levelStartTime = Date.now(); // Track start time for each level
+            let levelDescriptions = [
+                "Level 1: Basic Enemy! Collect the fruit and avoid the enemy, which slowly follows you.",
+                "Level 2: Enemy with Bullets! Beware, this enemy shoots bullets at intervals. Dodge the bullets and collect the fruit to move on!",
+                "Level 3: Giant Enemy! The large enemy follows you with high speed. Click on it to shrink its size and slow it down. Collect the fruit after weakening it to win!"
+            ];
+
+            // Player setup with random position
+            const player = {
+                x: Math.random() * (canvas.width - 60),
+                y: Math.random() * (canvas.height - 60),
+                width: 60,
+                height: 60,
+                speed: 10,
+                jumpDistance: 50,
+                lastDirection: { dx: 1, dy: 0 },
+                move(dx, dy) {
+                    this.x += dx * this.speed;
+                    this.y += dy * this.speed;
+                    this.x = Math.max(0, Math.min(canvas.width - this.width, this.x));
+                    this.y = Math.max(0, Math.min(canvas.height - this.height, this.y));
+                    this.lastDirection = { dx, dy };
+                },
+                jump() {
+                    this.x += this.lastDirection.dx * this.jumpDistance;
+                    this.y += this.lastDirection.dy * this.jumpDistance;
+                    this.x = Math.max(0, Math.min(canvas.width - this.width, this.x));
+                    this.y = Math.max(0, Math.min(canvas.height - this.height, this.y));
+
+                    jumpSound.currentTime = 0; // Reset to the start in case it was played recently
+                    jumpSound.play().catch(err => console.error("Error playing jump sound:", err));
+                }
+            };
+
+            // Fruit setup with random position
+            const fruit = {
+                x: Math.random() * (canvas.width - 40),
+                y: Math.random() * (canvas.height - 40),
+                width: 40,
+                height: 40
+            };
+
+            const bullets = []; // Array to hold bullets
+
+            // Enemy setup with random position
+            const enemy = {
+                x: Math.random() * (canvas.width - 60),
+                y: Math.random() * (canvas.height - 60),
+                width: 60,
+                height: 60,
+                speed: 0.25,
+                move() {
+                    const dx = player.x - this.x;
+                    const dy = player.y - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance > 5) {
+                        this.x += (dx / distance) * this.speed;
+                        this.y += (dy / distance) * this.speed;
+                    }
+                }
+            };
+
+            // Enemy2 setup with random position and shooting capability
+            const enemy2 = {
+                x: Math.random() * (canvas.width - 70),
+                y: Math.random() * (canvas.height - 70),
+                width: 70,
+                height: 70,
+                speed: 0.3,
+                shootInterval: 1000,
+                lastShotTime: 0,
+                move() {
+                    const dx = player.x - this.x;
+                    const dy = player.y - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance > 5) {
+                        this.x += (dx / distance) * this.speed;
+                        this.y += (dy / distance) * this.speed;
+                    }
+                    const currentTime = Date.now();
+                    if (currentTime - this.lastShotTime > this.shootInterval) {
+                        this.shootBullet();
+                        this.lastShotTime = currentTime;
+                    }
+                },
+                shootBullet() {
+                const dx = player.x - this.x;
+                 const dy = player.y - this.y;
+                   const distance = Math.sqrt(dx * dx + dy * dy);
+                   const bullet = {
+                   x: this.x + this.width / 2,
+                   y: this.y + this.height / 2,
+                   width: 25,
+                   height: 25,
+                   speed: 0.1, // Adjustable speed
+                   vx: (dx / distance) * 0.1, // Scale velocity by bullet speed
+                   vy: (dy / distance) * 0.1
+                 };
+                  bullets.push(bullet);
+
+                  gunshotSound.currentTime = 0; // Reset to the start in case it was played recently
+                gunshotSound.play().catch(err => console.error("Error playing sound:", err));
+                    }
+
+            };
+
+            // Enemy3 setup with initial large size and high speed
+            const enemy3 = {
+                x: Math.random() * (canvas.width - 120),
+                y: Math.random() * (canvas.height - 120),
+                width: 120, // Initial large size
+                height: 120, // Initial large size
+                speed: 0.35, // Initial high speed
+                move() {
+                    const dx = player.x - this.x;
+                    const dy = player.y - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance > 5) {
+                        this.x += (dx / distance) * this.speed;
+                        this.y += (dy / distance) * this.speed;
+                    }
+                },
+                shrink() {
+                    this.width /= 2; // Shrink to half size
+                    this.height /= 2;
+                    this.speed /= 2; // Slow down
+                }
+            };
+
+            function checkCollision(a, b) {
+                return (
+                    a.x < b.x + b.width &&
+                    a.x + a.width > b.x &&
+                    a.y < b.y + b.height &&
+                    a.y + a.height > b.y
+                );
+            }
+
+            function drawGame() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
+                ctx.drawImage(fruitImg, fruit.x, fruit.y, fruit.width, fruit.height);
+
+                if (currentLevel === 3) {
+                    ctx.drawImage(enemy3Img, enemy3.x, enemy3.y, enemy3.width, enemy3.height);
+                } else if (currentLevel === 2) {
+                    ctx.drawImage(enemy2Img, enemy2.x, enemy2.y, enemy2.width, enemy2.height);
+                } else {
+                    ctx.drawImage(enemyImg, enemy.x, enemy.y, enemy.width, enemy.height);
+                }
+
+                bullets.forEach((bullet) => {
+                    ctx.drawImage(bulletImg, bullet.x, bullet.y, bullet.width, bullet.height);
+                });
+
+                // Display level, timer, score, and lives at the bottom left
+                ctx.fillStyle = "black";
+                ctx.font = "14px Arial";
+                ctx.fillText(`Level: ${currentLevel}`, 10, canvas.height - 100);
+                ctx.fillText(`Time: ${timeCounter.toFixed(1)}s`, 10, canvas.height - 80);
+                ctx.fillText(`Score: ${score}`, 10, canvas.height - 60);
+                ctx.fillText(`Lives: ${lives}`, 10, canvas.height - 40);
+            }
+
+            function gameLoop() {
+                if (!gameRunning) return;
+
+                if (currentLevel === 3) {
+                    enemy3.move();
+                } else if (currentLevel === 2) {
+                    enemy2.move();
+
+                    bullets.forEach((bullet, index) => {
+                        bullet.x += bullet.vx;
+                        bullet.y += bullet.vy;
+
+                        if (checkCollision(player, bullet)) {
+                            handleLifeLoss();
+                            bullets.splice(index, 1);
+                        }
+
+                        if (
+                            bullet.x < 0 || bullet.x > canvas.width ||
+                            bullet.y < 0 || bullet.y > canvas.height
+                        ) {
+                            bullets.splice(index, 1);
+                        }
+                    });
+                } else {
+                    enemy.move();
+                }
+
+                drawGame();
+                timeCounter += 0.016;
+
+                if (checkCollision(player, fruit)) {
+
+                    fruitCollectedSound.currentTime = 0; 
+                    fruitCollectedSound.play().catch(err => console.error("Error playing fruit collection sound:", err));
+
+                    calculateScore();
+                    alert(`Level ${currentLevel} Complete! Your score: ${score}`);
+                    currentLevel++;
+                    resetLevel();
+                    if (currentLevel > 3) {
+                        alert(`You won the game! Final score: ${score}`);
+                        gameRunning = false;
+                        stopMusic();
+                        return;
+                    }
+                }
+
+                if ((currentLevel === 3 && checkCollision(player, enemy3)) || 
+                    (currentLevel === 2 && checkCollision(player, enemy2)) || 
+                    (currentLevel === 1 && checkCollision(player, enemy))) {
+                    handleLifeLoss();
+                }
+
+                requestAnimationFrame(gameLoop);
+            }
+
+            function handleLifeLoss() {
+                lives--;
+                // Play the life lost sound
+                lifeLostSound.currentTime = 0; // Reset to the start in case it was played recently
+                lifeLostSound.play().catch(err => console.error("Error playing life lost sound:", err));
+
+                if (lives > 0) {
+                    alert(`Ouch! You lost a life. Lives remaining: ${lives}`);
+                    resetPlayerPosition();
+                } else {
+
+                      // Play the game over sound when lives reach 0
+                    gameOverSound.currentTime = 0; // Reset to the start in case it was played recently
+                    gameOverSound.play().catch(err => console.error("Error playing game over sound:", err));
+
+
+                    alert("You ran out of lives! Restarting the game.");
+                    resetGame();
+                }
+                }
+
+
+            function calculateScore() {
+                const levelEndTime = Date.now();
+                const levelTime = (levelEndTime - levelStartTime) / 1000; // seconds
+                const levelScore = Math.max(0, baseScore - levelTime * 100); // Reduce score based on time
+                score += Math.round(levelScore); // Add to total score
+            }
+
+            function resetLevel() {
+    levelStartTime = Date.now();
+    player.x = Math.random() * (canvas.width - player.width);
+    player.y = Math.random() * (canvas.height - player.height);
+    fruit.x = Math.random() * (canvas.width - fruit.width);
+    fruit.y = Math.random() * (canvas.height - fruit.height);
+
+    enemy.x = Math.random() * (canvas.width - enemy.width);
+    enemy.y = Math.random() * (canvas.height - enemy.height);
+    enemy2.x = Math.random() * (canvas.width - enemy2.width);
+    enemy2.y = Math.random() * (canvas.height - enemy2.height);
+    enemy3.x = Math.random() * (canvas.width - enemy3.width);
+    enemy3.y = Math.random() * (canvas.height - enemy3.height);
+    
+    // Resetting enemy3 properties
+    enemy3.width = 120; // Reset to initial size
+    enemy3.height = 120;
+    enemy3.speed = 0.35; // Reset to initial speed
+
+    bullets.length = 0;
+
+    if (currentLevel === 3) {
+        enemy3.speed += 0.5; // Increase speed for level difficulty
+    } else if (currentLevel === 2) {
+        enemy2.speed += 0.5;
+    } else {
+        enemy.speed += 0.5;
+    }
+    
+    timeCounter = 0;
+}
+
+
+            function resetPlayerPosition() {
+                player.x = Math.random() * (canvas.width - player.width);
+                player.y = Math.random() * (canvas.height - player.height);
+            }
+
+            function resetGame() {
+                lives = 3;
+                score = 0;
+                currentLevel = 1;
+                resetLevel();
+                gameRunning = true;
+            }
+
+            // Mouse click event to shrink enemy3 on click
+            canvas.addEventListener('mousedown', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                if (
+                    currentLevel === 3 &&
+                    mouseX >= enemy3.x &&
+                    mouseX <= enemy3.x + enemy3.width &&
+                    mouseY >= enemy3.y &&
+                    mouseY <= enemy3.y + enemy3.height
+                ) {
+                    enemy3.shrink();
+                }
+            });
+
+            window.addEventListener('keydown', (e) => {
+                switch (e.key) {
+                    case 'ArrowUp': player.move(0, -1); break;
+                    case 'ArrowDown': player.move(0, 1); break;
+                    case 'ArrowLeft': player.move(-1, 0); break;
+                    case 'ArrowRight': player.move(1, 0); break;
+                    case ' ': player.jump(); break;
+                }
+            });
+        </script>
+    </body>
+    </html>
+
