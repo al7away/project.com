@@ -30,10 +30,33 @@
         </style>
     </head>
     <body>
+        <div id="controls">
+            <button id="up">Up</button>
+            <button id="left">Left</button>
+            <button id="right">Right</button>
+            <button id="down">Down</button>
+            <button id="jump">Jump</button>
+        </div>
+        <style>
+            #controls {
+                display: flex;
+                justify-content: center;
+                margin-top: 10px;
+            }
+            #controls button {
+                width: 60px;
+                height: 60px;
+                margin: 5px;
+                font-size: 16px;
+                border-radius: 5px;
+            }
+        </style>
+        
         <canvas id="gameCanvas" width="800" height="600"></canvas>
         <button id="resetButton">You WON!!!!!</button>
 
         <script>
+            
             const canvas = document.getElementById('gameCanvas');
             const ctx = canvas.getContext('2d');
 
@@ -62,6 +85,49 @@
 
             const resetButton = document.getElementById('resetButton');
 
+            document.getElementById('up').addEventListener('click', () => player.move(0, -1));
+            document.getElementById('down').addEventListener('click', () => player.move(0, 1));
+            document.getElementById('left').addEventListener('click', () => player.move(-1, 0));
+            document.getElementById('right').addEventListener('click', () => player.move(1, 0));
+            document.getElementById('jump').addEventListener('click', () => player.jump());
+
+            window.addEventListener('touchstart', startMusic, { once: true });
+
+
+            let touchStartX = 0;
+            let touchStartY = 0;
+
+            canvas.addEventListener('touchstart', (e) => {
+                const touch = e.touches[0];
+                touchStartX = touch.clientX;
+                touchStartY = touch.clientY;
+            });
+
+            canvas.addEventListener('touchmove', (e) => {
+                const touch = e.touches[0];
+                const deltaX = touch.clientX - touchStartX;
+                const deltaY = touch.clientY - touchStartY;
+
+                if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                    // Horizontal swipe
+                    if (deltaX > 0) player.move(1, 0); // Swipe right
+                    else player.move(-1, 0); // Swipe left
+                } else {
+                    // Vertical swipe
+                    if (deltaY > 0) player.move(0, 1); // Swipe down
+                    else player.move(0, -1); // Swipe up
+                }
+
+                touchStartX = touch.clientX;
+                touchStartY = touch.clientY;
+            });
+
+            canvas.addEventListener('touchend', () => {
+                player.jump(); // Trigger jump on touch release
+            });
+
+            
+
             function stopMusic() {
              backgroundMusic.pause(); // Pause the music
               backgroundMusic.currentTime = 0; // Reset to the start
@@ -76,6 +142,8 @@
                 window.removeEventListener('click', startMusic); 
                 window.removeEventListener('keydown', startMusic); 
             }
+
+            
 
             // Event listener to start music on first user interaction
             window.addEventListener('click', startMusic);
